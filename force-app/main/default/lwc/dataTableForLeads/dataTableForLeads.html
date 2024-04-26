@@ -1,0 +1,21 @@
+<template>
+    <lightning-card title="Leads">
+      <lightning-input type="search" placeholder="Search Leads" label="Search Leads" onchange={handleSearchBar} data-id="searchInput"></lightning-input>
+
+        <div style="height: 800px;">
+            <lightning-datatable
+                    key-field="id"
+                    data={leads}
+                    columns={columns}
+                    onrowselection={onRowSelection}
+            >
+            </lightning-datatable>
+        </div>
+    </lightning-card>
+    <lightning-button 
+      variant="base"
+      label="Send Post Request" 
+      onclick={handleButtonClick} 
+    ></lightning-button>
+  </template>
+  
