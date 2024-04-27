@@ -76,7 +76,8 @@ export default class DataTableForLeads extends LightningElement {
     selectedIds = [];
 
     columns = [
-        { label: 'Name', fieldName: 'name', type: 'text' },
+        { label: 'First Name', fieldName: 'firstname', type: 'text' },
+        { label: 'Last Name', fieldName: 'lastname', type: 'text' },
         { label: 'Email', fieldName: 'email', type: 'text' },
         { label: 'Company', fieldName: 'company', type: 'text' },
         {
