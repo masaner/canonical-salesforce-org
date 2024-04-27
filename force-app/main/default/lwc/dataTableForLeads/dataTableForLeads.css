@@ -1,0 +1,9 @@
+.lead-search,
+.lead-list,
+.sales-rep-actions {
+  margin: 10px;
+}
+
+.lead-list {
+  height: 500px;
+}

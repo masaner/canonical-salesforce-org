@@ -1,92 +1,25 @@
-// import { LightningElement, api, wire } from 'lwc';
-// import getLeads from '@salesforce/apex/Foobar.getLeads';
-
-
-// export default class DataTableForLeads extends LightningElement {
-//   @api leads = [];
-//   searchTerm = '';
-//   selectedIds = [];
-
-//   columns = [
-//     { label: 'Name', fieldName: 'name', type: 'text' },
-//     { label: 'Email', fieldName: 'email', type: 'text' },
-//     { label: 'Company', fieldName: 'company', type: 'text' },
-//     {
-//       type: 'action',
-//       typeAttributes: { label: 'Select', fieldName: 'id' },
-//       contentActions: [
-//         { label: 'Select', name: 'select', type: 'checkbox' },
-//       ],
-//     },
-//   ];
-
-//   @wire(getLeads)
-//   wiredLeads({ data, error }) {
-//     if (data) {
-//       this.leads = JSON.parse(data);
-//     } else if (error) {
-//       console.error('Error fetching leads:', error);
-//     }
-//   }
-
-
-//   handleSearch(event) {
-//     this.searchTerm = event.detail.value.toLowerCase();
-//     this.updateLeads();
-//   }
-
-//   handleSelectAll(event) {
-//     const isChecked = event.detail.checked;
-//     this.selectedIds = isChecked ? this.leads.map(lead => lead.id) : [];
-//   }
-
-//   handleCheckboxSelect(event) {
-//     const isChecked = event.detail.checked;
-//     const leadId = event.target.dataset.id;
-//     if (isChecked) {
-//       this.selectedIds.push(leadId);
-//     } else {
-//       this.selectedIds = this.selectedIds.filter(id => id !== leadId);
-//     }
-//   }
-
-//   updateLeads() {
-//     this.leads = this.template.data.leads.filter(lead => {
-//       const searchTerm = this.searchTerm;
-//       return (
-//         lead.name.toLowerCase().includes(searchTerm) ||
-//         lead.email.toLowerCase().includes(searchTerm) ||
-//         lead.company.toLowerCase().includes(searchTerm)
-//       );
-//     });
-//   }
-
-// }
 import { LightningElement, api, wire, track } from 'lwc';
 import { ShowToastEvent } from 'lightning/platformShowToastEvent';
 import getLeads from '@salesforce/apex/Foobar.getLeads';
 import sendPostRequest from '@salesforce/apex/Foobar.sendPostRequest';
-
+import LightningConfirm from 'lightning/confirm';
 
 export default class DataTableForLeads extends LightningElement {
     @api leads = [];
     @track selectedRows = [];
     @track initialRecords = [];
     @track searchTerm = '';
+    @track salesRepName = '';
+    @track relatedJobId = '';
+    @track lastSalesRepTest = '';
+
     selectedIds = [];
 
     columns = [
         { label: 'First Name', fieldName: 'firstname', type: 'text' },
         { label: 'Last Name', fieldName: 'lastname', type: 'text' },
         { label: 'Email', fieldName: 'email', type: 'text' },
-        { label: 'Company', fieldName: 'company', type: 'text' },
-        {
-            type: 'action',
-            typeAttributes: { label: 'Select', fieldName: 'id' },
-            contentActions: [
-                { label: 'Select', name: 'select', type: 'checkbox' },
-            ],
-        },
+        { label: 'Company', fieldName: 'company', type: 'text' }
     ];
 
     @wire(getLeads)
@@ -124,21 +57,65 @@ export default class DataTableForLeads extends LightningElement {
         }
     }
 
-    handleButtonClick() {
+    async importLeads() {
+        let result = false;
+        if(this.relatedJobId && this.lastSalesRepTest == this.salesRepName){
+            result = await LightningConfirm.open({
+                message: 'There seems to be an already existing reference id from your previous imports, would you like to link these leads to the previous import?',
+                variant: 'header',
+                label: 'Link To Previous Import?',
+                theme: 'success'
+            });
+        }
+        
+        console.log(result);
+
         if (this.selectedRows.length > 0) {
+            const salesRepName = this.salesRepName;
             const selectedIds = this.selectedRows.map(row => row.id).join(',');
-            sendPostRequest({ selectedIds })
-                .then(result => {
-                    console.log('POST Response:', result);
-                    this.showToast('Success', 'POST request sent successfully.', 'success');
-                })
-                .catch(error => {
-                    console.error('Error sending POST request:', error);
-                    this.showToast('Error', 'Failed to send POST request.', 'error');
-                });
+    
+            if (result) {
+                this.joinLeadsWithExistingJob(this.relatedJobId, selectedIds, salesRepName);
+            } else {
+                this.sendNewRequest(selectedIds, salesRepName);
+            }
+        this.lastSalesRepTest = salesRepName;
         } else {
             this.showToast('Error', 'No leads selected.', 'error');
         }
+    }
+    
+    sendNewRequest(selectedIds, salesRepName) {
+        sendPostRequest({  undefined, selectedIds, salesRepName })
+            .then(result => {
+                console.log('POST Response:', result);
+                const parsedResult = JSON.parse(result); // Parse the JSON string received from Apex
+                console.log(parsedResult);
+                const jobId = parsedResult.jobId; // Access jobId from the parsed result
+                const referenceId = parsedResult.referenceId; 
+                if (jobId) {
+                    this.relatedJobId = referenceId;
+                    this.showToast('Success', 'POST request sent successfully.', 'success');
+                } else {
+                    this.showToast('Success', 'POST request sent successfully, but we didn\'t get a Job Id from the Response!', 'error');
+                }
+            })
+            .catch(error => {
+                console.error('Error sending POST request:', error);
+                this.showToast('Error', 'Failed to send POST request.', 'error');
+            });
+    }
+    
+    joinLeadsWithExistingJob(relatedJobId, selectedIds, salesRepName) {
+        sendPostRequest({ relatedJobId, selectedIds, salesRepName })
+            .then(result => {
+                console.log('POST Response:', result);
+                this.showToast('Success', 'POST request sent successfully.', 'success');
+            })
+            .catch(error => {
+                console.error('Error sending POST request:', error);
+                this.showToast('Error', 'Failed to send POST request.', 'error');
+            });
     }
     
     showToast(title, message, variant) {
@@ -150,17 +127,11 @@ export default class DataTableForLeads extends LightningElement {
         this.dispatchEvent(event);
     }
 
-    handleSelectAll(event) {
-        const isChecked = event.target.checked;
-        this.selectedIds = isChecked ? this.leads.map(lead => lead.id) : [];
-    }
-
     onRowSelection(event) {
         this.selectedRows = event.detail.selectedRows;
-        console.log(
-            'selectedRows are ',
-            JSON.stringify( this.selectedRows )
-        );
     }
 
+    handleSaleRepNameChange(event) {
+        this.salesRepName = event.detail.value;
+    }
 }
